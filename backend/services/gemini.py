@@ -105,7 +105,7 @@ def clean_json(text: str) -> str:
     return text
 
 def run_planner_agent(user_input: str) -> dict:
-    max_retries = 3
+    max_retries = 6
     last_error = None
     for attempt in range(max_retries):
         try:
@@ -127,19 +127,13 @@ def run_planner_agent(user_input: str) -> dict:
         except Exception as e:
             last_error = str(e)
             print(f"Planner attempt {attempt + 1} failed: {last_error}")
-            if "503" in last_error or "UNAVAILABLE" in last_error:
-                if attempt < max_retries - 1:
-                    time.sleep((attempt + 1) * 3)
-                    continue
-            if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
-                if attempt < max_retries - 1:
-                    continue
-                return {"error": "API quota exceeded on all keys. Please try again in a minute."}
-            if "closed" in last_error.lower():
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
-    return {"error": last_error or "Model temporarily unavailable. Please try again."}
+            if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error or "closed" in last_error.lower():
+                wait_time = min((attempt + 1) * 2, 10)
+                print(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            return {"error": last_error}
+    return {"error": "Gemini servers are experiencing very high demand right now. Please try again in a minute."}
 
 def run_prioritizer_agent(tasks: list) -> list:
     try:
