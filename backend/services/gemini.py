@@ -2,8 +2,8 @@ from google import genai
 import os
 import json
 import random
+import time
 from datetime import datetime
-from services.gemini import client
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,6 +14,8 @@ API_KEYS = [
     os.getenv("GEMINI_API_KEY_3"),
 ]
 API_KEYS = [k for k in API_KEYS if k]
+
+print(f"Loaded {len(API_KEYS)} Gemini API key(s)")
 
 def get_client():
     if not API_KEYS:
@@ -102,17 +104,17 @@ def clean_json(text: str) -> str:
                 return part
     return text
 
-import time
-
 def run_planner_agent(user_input: str) -> dict:
     max_retries = 3
+    last_error = None
     for attempt in range(max_retries):
         try:
             prompt = PLANNER_PROMPT.format(
                 current_datetime=datetime.now().strftime("%Y-%m-%d %H:%M"),
                 user_input=user_input
             )
-            response = client.models.generate_content(
+            local_client = get_client()
+            response = local_client.models.generate_content(
                 model="gemini-2.5-flash-lite",
                 contents=prompt
             )
@@ -123,17 +125,21 @@ def run_planner_agent(user_input: str) -> dict:
             print(f"JSON parse error: {e}")
             return {"error": f"JSON parse error: {str(e)}"}
         except Exception as e:
-            error_str = str(e)
-            if "503" in error_str or "UNAVAILABLE" in error_str:
+            last_error = str(e)
+            print(f"Planner attempt {attempt + 1} failed: {last_error}")
+            if "503" in last_error or "UNAVAILABLE" in last_error:
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 3
-                    print(f"Model unavailable, retrying in {wait_time}s... (attempt {attempt + 1})")
-                    time.sleep(wait_time)
+                    time.sleep((attempt + 1) * 3)
                     continue
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                return {"error": "API quota exceeded. Please try again in a minute."}
-            return {"error": error_str}
-    return {"error": "Model temporarily unavailable. Please try again in a few seconds."}
+            if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+                if attempt < max_retries - 1:
+                    continue
+                return {"error": "API quota exceeded on all keys. Please try again in a minute."}
+            if "closed" in last_error.lower():
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+    return {"error": last_error or "Model temporarily unavailable. Please try again."}
 
 def run_prioritizer_agent(tasks: list) -> list:
     try:
@@ -141,8 +147,9 @@ def run_prioritizer_agent(tasks: list) -> list:
             current_datetime=datetime.now().strftime("%Y-%m-%d %H:%M"),
             tasks_json=json.dumps(tasks, indent=2)
         )
-        response = client.models.generate_content(
-           model="gemini-2.5-flash-lite",
+        local_client = get_client()
+        response = local_client.models.generate_content(
+            model="gemini-2.5-flash-lite",
             contents=prompt
         )
         text = clean_json(response.text)
@@ -159,8 +166,9 @@ def run_nudge_agent(task_title: str, deadline: str, time_remaining: str) -> str:
             deadline=deadline,
             time_remaining=time_remaining
         )
-        response = client.models.generate_content(
-          model="gemini-2.5-flash-lite",
+        local_client = get_client()
+        response = local_client.models.generate_content(
+            model="gemini-2.5-flash-lite",
             contents=prompt
         )
         return response.text.strip()
