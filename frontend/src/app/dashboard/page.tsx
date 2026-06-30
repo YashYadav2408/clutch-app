@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [theme, setTheme] = useState<"dark" | "midnight" | "slate" | "forest">("dark");
   const [nudgeMessage, setNudgeMessage] = useState<string | null>(null);
+  const [loadingNudge, setLoadingNudge] = useState(false);
   const [briefing, setBriefing] = useState<string | null>(null);
   const [loadingBriefing, setLoadingBriefing] = useState(false);
 
@@ -56,13 +57,24 @@ if (!user) {
 
   const completedTasks = tasks.filter(t => t.completed);
 
-  const fetchNudge = async () => {
-  const urgentTask = tasks.find(t => !t.completed && t.priority_level === "high");
-  if (!urgentTask || !urgentTask.suggested_deadline) return;
-  const diff = new Date(urgentTask.suggested_deadline).getTime() - new Date().getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const res = await getNudge(urgentTask.task_title, urgentTask.suggested_deadline, `${hours} hours`) as any;
-  if (res.success) setNudgeMessage(res.data?.message);
+ const fetchNudge = async () => {
+  setLoadingNudge(true);
+  try {
+    let targetTask = tasks.find(t => !t.completed && t.priority_level === "high");
+    if (!targetTask) {
+      targetTask = tasks.find(t => !t.completed);
+    }
+    if (!targetTask || !targetTask.suggested_deadline) {
+      setNudgeMessage("No active tasks to nudge you about right now. Add a task to get started!");
+      return;
+    }
+    const diff = new Date(targetTask.suggested_deadline).getTime() - new Date().getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const res = await getNudge(targetTask.task_title, targetTask.suggested_deadline, `${hours} hours`) as any;
+    if (res.success) setNudgeMessage(res.data?.message);
+  } finally {
+    setLoadingNudge(false);
+  }
 };
 
   const greeting = () => {
@@ -141,11 +153,12 @@ if (!user) {
     </div>
     <div className="flex items-center gap-2">
       <button
-        onClick={fetchNudge}
-        className="text-xs text-gray-400 hover:text-purple-300 bg-gray-800 hover:bg-purple-950 px-3 py-2 rounded-lg transition-all border border-gray-700 hover:border-purple-700 flex items-center gap-1.5"
-      >
-        🧠 <span>AI Nudge</span>
-      </button>
+  onClick={fetchNudge}
+  disabled={loadingNudge}
+  className="text-xs text-gray-400 hover:text-purple-300 bg-gray-800 hover:bg-purple-950 px-3 py-2 rounded-lg transition-all border border-gray-700 hover:border-purple-700 flex items-center gap-1.5 disabled:opacity-50"
+>
+  {loadingNudge ? "⏳" : "🧠"} <span>{loadingNudge ? "Thinking..." : "AI Nudge"}</span>
+</button>
       <button
         onClick={async () => {
           setLoadingBriefing(true);

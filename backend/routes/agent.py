@@ -71,21 +71,21 @@ Their upcoming tasks are: {tasks}
 Keep it under 3 sentences. Be motivating, specific, and reference their actual tasks.
 Return only the briefing text, nothing else.
 """
-    max_retries = 3
+    max_retries = 4
+    last_error = None
     for attempt in range(max_retries):
         try:
-            response = get_client().models.generate_content(
-                model="gemini-2.0-flash-lite",
+            local_client = get_client()
+            response = local_client.models.generate_content(
+                model="gemini-2.5-flash-lite",
                 contents=prompt
             )
             return {"briefing": response.text.strip()}
         except Exception as e:
-            error_str = str(e)
-            if "503" in error_str or "UNAVAILABLE" in error_str:
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2
-                    print(f"Model unavailable, retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
-            raise HTTPException(status_code=500, detail=str(e))
+            last_error = str(e)
+            print(f"Briefing attempt {attempt + 1} failed: {last_error}")
+            if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error or "closed" in last_error.lower():
+                time.sleep((attempt + 1) * 2)
+                continue
+            raise HTTPException(status_code=500, detail=last_error)
     raise HTTPException(status_code=503, detail="Model temporarily unavailable, please try again")
