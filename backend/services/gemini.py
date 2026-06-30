@@ -1,12 +1,25 @@
 from google import genai
 import os
 import json
+import random
 from datetime import datetime
+from services.gemini import client
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+API_KEYS = [
+    os.getenv("GEMINI_API_KEY_1"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3"),
+]
+API_KEYS = [k for k in API_KEYS if k]
+
+def get_client():
+    if not API_KEYS:
+        raise ValueError("No Gemini API keys configured")
+    key = random.choice(API_KEYS)
+    return genai.Client(api_key=key)
 
 PLANNER_PROMPT = """
 You are Clutch, an elite AI productivity coach. A user has given you a task or goal.

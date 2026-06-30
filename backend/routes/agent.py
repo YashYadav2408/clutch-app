@@ -1,6 +1,15 @@
 from fastapi import APIRouter, HTTPException
 from models.task import TaskInput, Task
-from services.gemini import run_planner_agent, run_prioritizer_agent, run_nudge_agent, client
+from services.gemini import (
+    run_planner_agent,
+    run_prioritizer_agent,
+    run_nudge_agent,
+    get_client,
+    PLANNER_PROMPT,
+    clean_json,
+    API_KEYS,
+    json
+)
 from services.firebase import save_task, get_tasks
 from datetime import datetime
 import time
@@ -8,18 +17,29 @@ import time
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 @router.post("/plan")
-async def plan_task(input: TaskInput):
-    try:
-        plan = run_planner_agent(input.user_input)
-        if "error" in plan:
-            raise HTTPException(status_code=500, detail=plan["error"])
-        plan["user_id"] = input.user_id
-        plan["created_at"] = datetime.now().isoformat()
-        task_id = save_task(input.user_id, plan)
-        plan["id"] = task_id
-        return {"success": True, "task": plan}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def run_planner_agent(user_input: str) -> dict:
+    max_retries = len(API_KEYS) * 2
+    for attempt in range(max_retries):
+        try:
+            prompt = PLANNER_PROMPT.format(
+                current_datetime=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                user_input=user_input
+            )
+            response = get_client().models.generate_content(
+                model="gemini-2.0-flash-lite",
+                contents=prompt
+            )
+            text = clean_json(response.text)
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            return {"error": f"JSON parse error: {str(e)}"}
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "503" in error_str:
+                print(f"Key failed, trying another... (attempt {attempt + 1})")
+                continue
+            return {"error": error_str}
+    return {"error": "All API keys exhausted. Please try again in a minute."}
 
 @router.post("/prioritize/{user_id}")
 async def prioritize_tasks(user_id: str):
@@ -54,7 +74,7 @@ Return only the briefing text, nothing else.
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
+            response = get_client().models.generate_content(
                 model="gemini-2.0-flash-lite",
                 contents=prompt
             )
