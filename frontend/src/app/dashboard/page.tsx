@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/components/AuthProvider";
 import { useTasks } from "@/hooks/useTasks";
 import { TaskCard } from "@/components/TaskCard";
 import { AIChat } from "@/components/AIChat";
@@ -17,17 +17,63 @@ export default function Dashboard() {
   const { tasks, loading, adding, stats, addTask, completeTask, removeTask, prioritize, updateSubtaskStatus } = useTasks(user?.email || null);
   const [filter, setFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [theme, setTheme] = useState<"dark" | "midnight" | "slate" | "forest">("dark");
   const [nudgeMessage, setNudgeMessage] = useState<string | null>(null);
   const [loadingNudge, setLoadingNudge] = useState(false);
   const [briefing, setBriefing] = useState<string | null>(null);
   const [loadingBriefing, setLoadingBriefing] = useState(false);
 
-const themeConfig = {
-  dark: { bg: "bg-gray-950", sidebar: "bg-gray-900", card: "bg-gray-900", border: "border-gray-800", accent: "bg-gray-700" },
-  midnight: { bg: "bg-slate-950", sidebar: "bg-slate-900", card: "bg-slate-900", border: "border-slate-800", accent: "bg-slate-700" },
-  slate: { bg: "bg-zinc-950", sidebar: "bg-zinc-900", card: "bg-zinc-900", border: "border-zinc-800", accent: "bg-zinc-700" },
-  forest: { bg: "bg-emerald-950", sidebar: "bg-emerald-900", card: "bg-emerald-900", border: "border-emerald-800", accent: "bg-emerald-800" },
+type ThemeKey = "dark" | "midnight" | "slate" | "forest" | "ocean" | "sunset" | "rose";
+
+const [theme, setTheme] = useState<ThemeKey>(() => {
+  if (typeof window !== "undefined") {
+    return (localStorage.getItem("clutch-theme") as ThemeKey) || "dark";
+  }
+  return "dark";
+});
+
+useEffect(() => {
+  localStorage.setItem("clutch-theme", theme);
+}, [theme]);
+
+const themeConfig: Record<ThemeKey, {
+  bg: string; sidebar: string; card: string; border: string; accent: string;
+  hoverBorder: string; text: string; subtext: string;
+}> = {
+  dark: {
+    bg: "bg-gray-950", sidebar: "bg-gray-900", card: "bg-gray-900",
+    border: "border-gray-800", accent: "bg-gray-700",
+    hoverBorder: "hover:border-gray-600", text: "text-white", subtext: "text-gray-400"
+  },
+  midnight: {
+    bg: "bg-slate-950", sidebar: "bg-slate-900", card: "bg-slate-900",
+    border: "border-slate-800", accent: "bg-slate-700",
+    hoverBorder: "hover:border-slate-600", text: "text-white", subtext: "text-slate-400"
+  },
+  slate: {
+    bg: "bg-zinc-950", sidebar: "bg-zinc-900", card: "bg-zinc-900",
+    border: "border-zinc-800", accent: "bg-zinc-700",
+    hoverBorder: "hover:border-zinc-600", text: "text-white", subtext: "text-zinc-400"
+  },
+  forest: {
+    bg: "bg-emerald-950", sidebar: "bg-emerald-900", card: "bg-emerald-900",
+    border: "border-emerald-800", accent: "bg-emerald-800",
+    hoverBorder: "hover:border-emerald-600", text: "text-white", subtext: "text-emerald-300"
+  },
+  ocean: {
+    bg: "bg-sky-950", sidebar: "bg-sky-900", card: "bg-sky-900",
+    border: "border-sky-800", accent: "bg-sky-700",
+    hoverBorder: "hover:border-sky-600", text: "text-white", subtext: "text-sky-300"
+  },
+  sunset: {
+    bg: "bg-orange-950", sidebar: "bg-orange-900", card: "bg-orange-900",
+    border: "border-orange-800", accent: "bg-orange-700",
+    hoverBorder: "hover:border-orange-600", text: "text-white", subtext: "text-orange-300"
+  },
+  rose: {
+    bg: "bg-rose-950", sidebar: "bg-rose-900", card: "bg-rose-900",
+    border: "border-rose-800", accent: "bg-rose-700",
+    hoverBorder: "hover:border-rose-600", text: "text-white", subtext: "text-rose-300"
+  },
 };
 
 const t = themeConfig[theme];
@@ -70,8 +116,8 @@ if (!user) {
     }
     const diff = new Date(targetTask.suggested_deadline).getTime() - new Date().getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    const res = await getNudge(targetTask.task_title, targetTask.suggested_deadline, `${hours} hours`) as any;
-    if (res.success) setNudgeMessage(res.data?.message);
+   const res = await getNudge(targetTask.task_title, targetTask.suggested_deadline, `${hours} hours`);
+    if (res.success) setNudgeMessage(res.data?.message ?? null);
   } finally {
     setLoadingNudge(false);
   }
@@ -85,10 +131,10 @@ if (!user) {
   };
 
 
-  return (
-    <div className="min-h-screen bg-gray-950 text-white flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col p-4">
+ return (
+  <div className={`min-h-screen ${t.bg} ${t.text} flex transition-colors duration-300`}>
+    {/* Sidebar */}
+    <div className={`w-64 ${t.sidebar} border-r ${t.border} flex flex-col p-4 transition-colors duration-300`}>
         <div className="mb-8">
           <h1 className="text-2xl font-bold">⚡ Clutch</h1>
           <p className="text-xs text-gray-500 mt-1">Perform when it counts</p>
@@ -141,7 +187,7 @@ if (!user) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-800">
+        <div className={`px-6 py-4 border-b ${t.border}`}>
   <div className="flex items-center justify-between">
     <div>
       <h2 className="text-xl font-semibold">
@@ -168,7 +214,7 @@ if (!user) {
               .slice(0, 3)
               .map(t => t.task_title)
               .join(", ");
-            const res = await fetch("http://localhost:8000/agent/briefing", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agent/briefing`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -236,7 +282,7 @@ if (!user) {
     { label: "Overdue", value: stats.overdue, color: "text-amber-400" },
     { label: "Completed", value: stats.completed, color: "text-green-400" },
   ].map(stat => (
-    <Card key={stat.label} className="bg-gray-900 border-gray-800 p-3">
+   <Card key={stat.label} className={`${t.card} ${t.border} p-3`}>
       <p className="text-gray-400 text-xs mb-0.5">{stat.label}</p>
       <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
     </Card>
@@ -477,12 +523,15 @@ if (!user) {
       <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">🎨 Appearance</p>
       <p className="text-sm text-gray-300 mb-3">Theme</p>
       <div className="grid grid-cols-4 gap-3">
-        {([
-          { key: "dark", label: "Dark", preview: "bg-gray-900", dot: "bg-gray-600" },
-          { key: "midnight", label: "Midnight", preview: "bg-slate-900", dot: "bg-slate-500" },
-          { key: "slate", label: "Slate", preview: "bg-zinc-900", dot: "bg-zinc-500" },
-          { key: "forest", label: "Forest", preview: "bg-emerald-950", dot: "bg-emerald-600" },
-        ] as const).map(th => (
+  {([
+    { key: "dark", label: "Dark", preview: "bg-gray-900", dot: "bg-gray-600" },
+    { key: "midnight", label: "Midnight", preview: "bg-slate-900", dot: "bg-slate-500" },
+    { key: "slate", label: "Slate", preview: "bg-zinc-900", dot: "bg-zinc-500" },
+    { key: "forest", label: "Forest", preview: "bg-emerald-950", dot: "bg-emerald-600" },
+    { key: "ocean", label: "Ocean", preview: "bg-sky-950", dot: "bg-sky-500" },
+    { key: "sunset", label: "Sunset", preview: "bg-orange-950", dot: "bg-orange-600" },
+    { key: "rose", label: "Rose", preview: "bg-rose-950", dot: "bg-rose-600" },
+  ] as const).map(th => (
           <button
             key={th.key}
             onClick={() => setTheme(th.key)}
@@ -633,9 +682,9 @@ if (!user) {
 
         {/* AI Chat at bottom */}
         {activeTab === "dashboard" && (
-            <div className="border-t border-gray-800 p-4">
+           <div className={`border-t ${t.border} p-4`}>
             <AIChat onSubmit={addTask} loading={adding} />
-            </div>
+          </div>
           )}
       </div>
     </div>

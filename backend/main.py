@@ -11,7 +11,11 @@ app = FastAPI(title="Clutch API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-deployed-frontend.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://clutch-app-cc6fd.web.app",
+        "https://clutch-app-cc6fd.firebaseapp.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

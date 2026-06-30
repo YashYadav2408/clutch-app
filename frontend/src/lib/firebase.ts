@@ -1,5 +1,12 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User } from "firebase/auth";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,26 +21,18 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-export const signInWithGoogle = async () => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return { user: result.user, error: null };
-  } catch (error: any) {
-    return { user: null, error: error.message };
-  }
+export const signInWithGoogle = async (): Promise<User> => {
+  const result = await signInWithPopup(auth, googleProvider);
+  return result.user;
 };
 
-export const signOut = async () => {
-  try {
-    await firebaseSignOut(auth);
-    return { error: null };
-  } catch (error: any) {
-    return { error: error.message };
-  }
+export const signOut = async (): Promise<void> => {
+  await firebaseSignOut(auth);
 };
 
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
+export type { User };
 export { auth };

@@ -1,9 +1,44 @@
 "use client";
-import { useState, useEffect, useRef, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 
 interface AIChatProps {
-  onSubmit: (input: string) => Promise<any>;
+  onSubmit: (input: string) => Promise<unknown>;
   loading: boolean;
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
 }
 
 const suggestions = [
@@ -17,71 +52,70 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const listeningRef = useRef(false);
   const transcriptRef = useRef("");
 
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    setVoiceSupported(!!SpeechRecognition);
+    const SpeechRecognitionImpl =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    setVoiceSupported(!!SpeechRecognitionImpl);
   }, []);
 
-  const createRecognition = () => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
+  const createRecognition = (): SpeechRecognitionLike | null => {
+    const SpeechRecognitionImpl =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionImpl) return null;
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionImpl();
     recognition.lang = "en-IN";
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event) => {
       let final = "";
       let interim = "";
       for (let i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript;
+        const result = event.results[i];
+        if (result.isFinal) {
+          final += result[0].transcript;
         } else {
-          interim += event.results[i][0].transcript;
+          interim += result[0].transcript;
         }
       }
       if (final) {
-        transcriptRef.current = transcriptRef.current + " " + final;
-        setTranscript(transcriptRef.current.trim());
-        setInput(transcriptRef.current.trim());
-      } else {
+        transcriptRef.current = (transcriptRef.current + " " + final).trim();
+        setInput(transcriptRef.current);
+      } else if (interim) {
         setInput((transcriptRef.current + " " + interim).trim());
       }
     };
 
     recognition.onend = () => {
-      // Auto restart if still in listening mode
       if (listeningRef.current) {
         try {
           recognition.start();
-        } catch (e) {
-          // Create fresh instance if restart fails
-          const newRecognition = createRecognition();
-          if (newRecognition) {
-            recognitionRef.current = newRecognition;
-            try { newRecognition.start(); } catch (e2) { console.error(e2); }
+        } catch {
+          const fresh = createRecognition();
+          if (fresh) {
+            recognitionRef.current = fresh;
+            try {
+              fresh.start();
+            } catch {
+              // give up silently, user can click again
+            }
           }
         }
       }
     };
 
-    recognition.onerror = (event: any) => {
-      if (event.error === "no-speech") return; // ignore silence
-      if (event.error === "aborted") return; // ignore manual stop
-      console.error("Speech error:", event.error);
+    recognition.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
       if (event.error === "not-allowed") {
-        alert("Microphone access denied. Please allow microphone access in your browser settings.");
+        alert(
+          "Microphone access denied. Please allow microphone access in your browser settings."
+        );
         listeningRef.current = false;
         setListening(false);
       }
@@ -96,7 +130,6 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
       return;
     }
     transcriptRef.current = "";
-    setTranscript("");
     listeningRef.current = true;
     setListening(true);
 
@@ -105,8 +138,8 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
     recognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch (e) {
-      console.error(e);
+    } catch {
+      // ignore — user can retry
     }
   };
 
@@ -116,8 +149,8 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {
-        console.error(e);
+      } catch {
+        // ignore
       }
     }
   };
@@ -127,7 +160,6 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
     if (listening) stopVoice();
     const value = input.trim();
     setInput("");
-    setTranscript("");
     transcriptRef.current = "";
     await onSubmit(value);
   };
@@ -164,7 +196,7 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
                 className="w-1 bg-red-500 rounded-full animate-pulse"
                 style={{
                   height: `${Math.random() * 12 + 4}px`,
-                  animationDelay: `${i * 0.1}s`
+                  animationDelay: `${i * 0.1}s`,
                 }}
               />
             ))}
@@ -178,7 +210,7 @@ export const AIChat = ({ onSubmit, loading }: AIChatProps) => {
       <div className="flex gap-2 items-end">
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
             listening

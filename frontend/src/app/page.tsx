@@ -1,11 +1,11 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const { user, loading, signIn } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function Home() {
         </div>
 
         <Button
-          onClick={signIn}
+          onClick={signInWithGoogle}
           className="bg-white text-black hover:bg-gray-100 px-8 py-6 text-lg rounded-xl font-semibold"
           disabled={loading}
         >
